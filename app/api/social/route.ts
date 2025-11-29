@@ -1,36 +1,15 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText } from 'ai';
 
-export async function generateBlogPost(apiKey: string, prompt: string, model: string = 'gemini-1.5-flash') {
-    const google = createGoogleGenerativeAI({
-        apiKey: apiKey,
-    });
+export const runtime = 'edge';
 
-    const modelsToTry = [model, 'gemini-1.5-pro', 'gemini-1.0-pro'];
+export async function POST(req: Request) {
+    const { content, apiKey } = await req.json();
 
-    for (const currentModel of modelsToTry) {
-        try {
-            console.log(`Attempting generation with model: ${currentModel}`);
-            const result = await streamText({
-                model: google(currentModel),
-                system: 'You are an expert blog post writer. Write clean, formatted HTML content suitable for a rich text editor. Use <h1>, <h2>, <p>, <ul>, <li>, <strong>, <em> tags where appropriate. Do not wrap the content in markdown code blocks or ```html. Just return the raw HTML content.',
-                prompt: prompt,
-            });
-            return result;
-        } catch (error: any) {
-            console.warn(`Failed with model ${currentModel}:`, error.message);
-            // If this was the last model, throw the error
-            if (currentModel === modelsToTry[modelsToTry.length - 1]) {
-                console.error("All model fallbacks failed.");
-                throw error;
-            }
-            // Otherwise continue to next model
-        }
+    if (!apiKey) {
+        return new Response("API key is required", { status: 400 });
     }
-    throw new Error("Generation failed");
-}
 
-export async function generateSocialThreads(apiKey: string, blogContent: string, model: string = 'gemini-1.5-flash') {
     const google = createGoogleGenerativeAI({
         apiKey: apiKey,
     });
@@ -54,10 +33,10 @@ export async function generateSocialThreads(apiKey: string, blogContent: string,
      Prioritize hook → value → CTA in every single post. Make them feel native to each platform. Use curiosity gaps, numbers, and emotional triggers.
 
      Blog Post Content:
-     ${blogContent}
+     ${content}
   `;
 
-    const modelsToTry = [model, 'gemini-1.5-pro', 'gemini-1.0-pro'];
+    const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'];
 
     for (const currentModel of modelsToTry) {
         try {
@@ -67,14 +46,14 @@ export async function generateSocialThreads(apiKey: string, blogContent: string,
                 system: 'You are a social media expert. Return ONLY valid JSON array.',
                 prompt: prompt,
             });
-            return result;
+            return result.toTextStreamResponse();
         } catch (error: any) {
             console.warn(`Failed with model ${currentModel}:`, error.message);
             if (currentModel === modelsToTry[modelsToTry.length - 1]) {
                 console.error("All social model fallbacks failed.");
-                throw error;
+                return new Response(JSON.stringify({ error: error.message }), { status: 500 });
             }
         }
     }
-    throw new Error("Social generation failed");
+    return new Response("Social generation failed", { status: 500 });
 }

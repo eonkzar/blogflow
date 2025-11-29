@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Share2, Copy, Check, Loader2 } from "lucide-react"
-import { generateSocialThreads } from "@/lib/ai"
+// import { generateSocialThreads } from "@/lib/ai" // Removed direct import
 import { DEMO_SOCIAL_THREADS } from "@/lib/demo"
 
 interface SocialPost {
@@ -48,13 +48,41 @@ export function SocialGenerator({ blogContent }: SocialGeneratorProps) {
                 await new Promise(r => setTimeout(r, 2000)) // Simulate processing
                 setPosts(DEMO_SOCIAL_THREADS as SocialPost[])
             } else {
-                // Real API Mode
-                const { textStream } = await generateSocialThreads(apiKey, blogContent)
+                // Real API Mode (Server-Side)
+                const response = await fetch('/api/social', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: blogContent, apiKey })
+                })
 
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}))
+                    throw new Error(errorData.error || response.statusText)
+                }
+
+                if (!response.body) throw new Error("No response body")
+
+                const reader = response.body.getReader()
+                const decoder = new TextDecoder()
                 let accumulated = ""
-                for await (const chunk of textStream) {
-                    accumulated += chunk
-                    setRawJson(accumulated)
+
+                while (true) {
+                    const { done, value } = await reader.read()
+                    if (done) break
+
+                    const chunk = decoder.decode(value, { stream: true })
+                    const lines = chunk.split('\n')
+                    for (const line of lines) {
+                        if (line.startsWith('0:')) {
+                            try {
+                                const text = JSON.parse(line.substring(2))
+                                accumulated += text
+                                setRawJson(accumulated)
+                            } catch (e) {
+                                // ignore
+                            }
+                        }
+                    }
                 }
 
                 // Try to parse the final JSON

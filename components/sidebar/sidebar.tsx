@@ -15,7 +15,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
-import { generateBlogPost } from "@/lib/ai"
+// import { generateBlogPost } from "@/lib/ai" // Removed direct import
 import { DEMO_BLOG_POST } from "@/lib/demo" // Added import
 
 interface SidebarProps {
@@ -55,17 +55,59 @@ export function Sidebar({ onStreamUpdate, onStreamStart, onStreamEnd }: SidebarP
                     onStreamUpdate(fullContent)
                 }
             } else {
-                // Real API Mode
-                const { textStream } = await generateBlogPost(apiKey, prompt)
+                // Real API Mode (Server-Side)
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt, apiKey })
+                })
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}))
+                    throw new Error(errorData.error || response.statusText)
+                }
+
+                if (!response.body) throw new Error("No response body")
+
+                const reader = response.body.getReader()
+                const decoder = new TextDecoder()
                 let fullContent = ""
-                for await (const textPart of textStream) {
-                    fullContent += textPart
-                    onStreamUpdate(fullContent)
+
+                while (true) {
+                    const { done, value } = await reader.read()
+                    if (done) break
+
+                    // The stream returns chunks formatted by AI SDK (0:"text")
+                    // We need to parse this format or just use the raw text if it's simple text stream
+                    // The toDataStreamResponse returns a specific format.
+                    // Let's simplify and assume we get raw text chunks if we used streamText directly? 
+                    // No, toDataStreamResponse sends protocol.
+                    // We should use `readDataStream` from `ai` package on client if possible, 
+                    // OR just manually parse if it's simple. 
+                    // Actually, for simplicity let's just append the decoded text and clean it up if needed.
+                    // Wait, `toDataStreamResponse` sends parts like `0:"chunk"\n`.
+                    // We need to parse that.
+
+                    const chunk = decoder.decode(value, { stream: true })
+                    // Basic parsing for AI SDK stream format (very naive)
+                    // Format is usually: 0:"text_chunk"\n
+                    const lines = chunk.split('\n')
+                    for (const line of lines) {
+                        if (line.startsWith('0:')) {
+                            try {
+                                const text = JSON.parse(line.substring(2))
+                                fullContent += text
+                                onStreamUpdate(fullContent)
+                            } catch (e) {
+                                // ignore parse error for partial lines
+                            }
+                        }
+                    }
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Generation failed", error)
-            alert("Generation failed. Check your API key.")
+            alert(`Generation failed: ${error.message || "Unknown error"}`)
         } finally {
             setIsGenerating(false)
             onStreamEnd()
