@@ -89,20 +89,8 @@ export function Sidebar({ onStreamUpdate, onStreamStart, onStreamEnd }: SidebarP
                     // We need to parse that.
 
                     const chunk = decoder.decode(value, { stream: true })
-                    // Basic parsing for AI SDK stream format (very naive)
-                    // Format is usually: 0:"text_chunk"\n
-                    const lines = chunk.split('\n')
-                    for (const line of lines) {
-                        if (line.startsWith('0:')) {
-                            try {
-                                const text = JSON.parse(line.substring(2))
-                                fullContent += text
-                                onStreamUpdate(fullContent)
-                            } catch (e) {
-                                // ignore parse error for partial lines
-                            }
-                        }
-                    }
+                    fullContent += chunk
+                    onStreamUpdate(fullContent)
                 }
             }
         } catch (error: any) {

@@ -71,18 +71,8 @@ export function SocialGenerator({ blogContent }: SocialGeneratorProps) {
                     if (done) break
 
                     const chunk = decoder.decode(value, { stream: true })
-                    const lines = chunk.split('\n')
-                    for (const line of lines) {
-                        if (line.startsWith('0:')) {
-                            try {
-                                const text = JSON.parse(line.substring(2))
-                                accumulated += text
-                                setRawJson(accumulated)
-                            } catch (e) {
-                                // ignore
-                            }
-                        }
-                    }
+                    accumulated += chunk
+                    setRawJson(accumulated)
                 }
 
                 // Try to parse the final JSON
